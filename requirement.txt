@@ -1,0 +1,29 @@
+# --------- 框架核心 ---------
+transformers>=4.40.0          # 模型+tokenizer
+torch>=2.0.0                  # 深度学习底座
+trl>=0.7.0                    # SFTTrainer / DPOTrainer / simPO
+peft>=0.9.0                   # LoRA 适配器
+accelerate>=0.20.0            # device_map="auto" 与 DeepSpeed 支持
+datasets>=2.14.0              # 数据集加载、map 操作
+
+# --------- 数值/工具 ---------
+pandas>=1.5.0                 # 读取 csv / 切片
+numpy>=1.21.0                 # 张量与数值处理
+scipy>=1.9.0                  # 可选：显著性检验、统计量
+scikit-learn>=1.1.0           # 可选：BLEU、ROUGE、F1 等指标
+nltk>=3.8                     # 可选：分词器，用于 BLEU/ROUGE
+rouge-score>=0.1.2            # 快速 ROUGE-1/2/L
+tqdm>=4.64                    # 进度条美化
+wandb>=0.15.0                 # 实验日志（也可选 tensorboard）
+
+# --------- 显卡信息 ---------
+nvidia-ml-py>=11.0.0          # Python 绑定 nvidia-smi，用于显存监控
+
+# --------- 性能加速（可选但强烈建议） ---------
+flash-attn>=2.3.0             # 需 CUDA 11.6+；显存↓ 速度↑
+bitsandbytes>=0.41.0          # 8-bit / 4-bit QLoRA、AdamW-8bit
+deepspeed>=0.12.0             # ZeRO-2/3  offload，全量微调省显存
+
+# --------- 代码质量（CI/CD 可选） ---------
+black>=23.0                   # 自动格式化
+flake8>=6.0                   # 语法/风格检查

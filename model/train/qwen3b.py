@@ -25,7 +25,7 @@ print(f"===================当前测试数据长度为：{t}====================
 def format_prompt(example):
     chat = [
         {"role": "system","content": "你是一个非常棒的人工智能助手。"},
-        {"role": "user", "content": example["现代文"]},
+        {"role": "user", "content": example["白话文"]},
         {"role": "assistant", "content": example["文言文"]}
     ]
     prompt = tokenizer.apply_chat_template(chat, tokenize=False)
@@ -59,3 +59,4 @@ print("===========================模型训练阶段=========================")
 output_dir = os.path.join(pro_path, "model", "results", model_name)
 
 print(f"==================结果存储路径为：{output_dir}========================")
+

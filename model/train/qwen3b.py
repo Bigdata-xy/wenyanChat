@@ -2,6 +2,7 @@ import os, sys, pathlib
 import pandas as pd, torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from peft import LoraConfig, get_peft_model
+from datasets import Dataset
 
 
 pro_path = os.path.join(pathlib.Path(__file__).parent.parent.parent)
@@ -29,8 +30,11 @@ def format_prompt(example):
     ]
     prompt = tokenizer.apply_chat_template(chat, tokenize=False)
     return {"text": prompt}
+    
+raw_df = test_dataset[:t]                                    # 1. 取前 5000 行（仍是 pandas）
+dataset = Dataset.from_pandas(raw_df)                        # 2. 转成 datasets.Dataset
+dataset = dataset.map(format_prompt, remove_columns=dataset.column_names)  # 3. 再 map
 
-dataset = test_dataset[:t , :].map(format_prompt, remove_columns=test_dataset.column_names)
 print("=====================训练数据示例为：====================")
 print(dataset[0])
 
@@ -53,4 +57,5 @@ model = get_peft_model(model, peft_config)
 print("===========================模型训练阶段=========================")
 
 output_dir = os.path.join(pro_path, "model", "results", model_name)
+
 print(f"==================结果存储路径为：{output_dir}========================")

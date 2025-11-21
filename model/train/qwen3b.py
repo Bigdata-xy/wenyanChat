@@ -3,14 +3,14 @@ import pandas as pd, torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments
 from peft import LoraConfig, get_peft_model
 from trl import SFTTrainer
-from datasets import Dataset 
+from datasets import Dataset
 
 pro_path = os.path.join(pathlib.Path(__file__).parent.parent.parent)
 data_path = os.path.join(pro_path, "data")
 print(f"==============当前的项目路径为：{pro_path}===============")
 
 # 模型名称
-model_name = os.path.join(pro_path, "model", "model_", "qwen2.5-3b-instruct")
+model_name = os.path.join(pro_path, "model", "model_", "qwen", "qwen", "Qwen2.5-3B-Instruct")
 # model_name = "Qwen/Qwen2.5-3B-Instruct"
 print(f"===============当前模型为：{model_name}=======================")
 
@@ -20,7 +20,7 @@ tokenizer.padding_side = "left"
 
 # 数据导入
 test_dataset = pd.read_csv(os.path.join(data_path, "data_combined.csv"))
-t = 5000
+t = 30000
 print(f"===================当前测试数据长度为：{t}===========================")
 
 def format_prompt(example):
@@ -31,7 +31,7 @@ def format_prompt(example):
     ]
     prompt = tokenizer.apply_chat_template(chat, tokenize=False)
     return {"text": prompt}
-    
+
 raw_df = test_dataset[:t]                                    # 1. 取前 5000 行（仍是 pandas）
 dataset = Dataset.from_pandas(raw_df)                        # 2. 转成 datasets.Dataset
 dataset = dataset.map(format_prompt, remove_columns=dataset.column_names)  # 3. 再 map
@@ -45,12 +45,12 @@ model = AutoModelForCausalLM.from_pretrained(model_name, local_files_only=True, 
 
 # Lora 冻结权重，嵌套参数
 peft_config = LoraConfig(
-    lora_alpha = 32,
-    lora_dropout = 0.1,
+    lora_alpha = 128,
+    lora_dropout = 0.05,
     r = 64,
     bias = "none",
     task_type = "CAUSAL_LM",
-    target_modules = ['k_proj', 'v_proj', 'q_proj']
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 )
 
 model = get_peft_model(model, peft_config)
@@ -58,33 +58,36 @@ model = get_peft_model(model, peft_config)
 # 模型训练
 print("===========================模型训练阶段=========================")
 
-output_dir = os.path.join(pro_path, "model", "results", model_name)
+output_dir = os.path.join(pro_path, "model", "results","qwen2.5-3b-instruct-sft")
 
 print(f"==================结果存储路径为：{output_dir}========================")
 
 training_arguments = TrainingArguments(
     output_dir = output_dir,
-    per_device_train_batch_size = 2,
-    gradient_accumulation_steps = 4,
+    per_device_train_batch_size = 1,
+    gradient_accumulation_steps = 16,
     optim = "adamw_torch",
-    learning_rate = 2e-4,
+    learning_rate = 3e-4,
+    warmup_ratio=0.1,
     lr_scheduler_type = "cosine",
-    num_train_epochs = 3,
+    num_train_epochs = 4,
     logging_steps = 50,
     fp16=False,
     bf16 = True,
     gradient_checkpointing=True,
-    save_steps=200,
+    save_total_limit=3,
+    group_by_length=False,
+    dataloader_drop_last=False,
+    save_steps=1000,
     max_steps=-1,
 )
 
 trainer = SFTTrainer(
-    max_seq_length=512,
     model=model,
     args=training_arguments,
-    dataset_text_field="text",
+    formatting_func=lambda x: x["text"],
     train_dataset=dataset,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     peft_config=peft_config,
 )
 
@@ -102,7 +105,7 @@ log_dict = {
     "model_name": model_name,
     "task": "SFT",                       # 换 DPO/simPO 时改这里
     "n_train_samples": len(dataset),
-    "max_seq_length": trainer.args.max_seq_length,
+    "max_length": trainer.args.max_length,
     "training_args": trainer.args.to_dict(),   # 所有 TrainingArguments 超参
     "peft_config": peft_config.to_dict(),      # LoRA 参数
     "final_train_loss": trainer.state.log_history[-1].get("train_loss", None),
@@ -112,17 +115,33 @@ log_dict = {
     "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
     "python_version": sys.version,
     "cuda_version": torch.version.cuda,
-    "transformers_version": transformers.__version__,
+    "transformers_version": "4.57.1",
     "trl_version": trl.__version__,
     }
+
+def make_json_serializable(obj):
+    """把常见非 JSON 类型转成可序列化形式"""
+    if isinstance(obj, set):
+        return list(obj)
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(i) for i in obj]
+    if isinstance(obj, (torch.Tensor, torch.device)):
+        return str(obj)          # 张量/设备直接转字符串
+    return obj
 
 # ------- 2. 可选：在验证集上快速算 perplexity（若你传了 eval_dataset） -------
 if trainer.eval_dataset is not None:
     eval_results = trainer.evaluate()
     log_dict["eval_perplexity"] = torch.exp(torch.tensor(eval_results["eval_loss"])).item()
     log_dict["eval_loss"] = eval_results["eval_loss"]
+else:
+    log_dict["eval_loss"] = None
+    log_dict["eval_perplexity"] = None
 
 # ------- 3. 写入外部 json -------
+log_dict = make_json_serializable(log_dict)
 json_path = os.path.join(output_dir, "experiment_log.json")
 with open(json_path, "w", encoding="utf-8") as f:
     json.dump(log_dict, f, ensure_ascii=False, indent=2)

@@ -7,8 +7,9 @@ sys.path.insert(0, pro_path)
 from src.llm import llm_client
 from conf.model import LLM_MODEL
 data_path = os.path.join(pro_path, "data")
-data_DPO_simPO = pd.read_csv(os.path.join(data_path, "data_DPO_simPO.csv"))
-data_DPO_simPO_train = os.path.join(pro_path, "data", "train", "data_DPO_simPO_train.csv")
+data_combined = pd.read_csv(os.path.join(data_path, "data_combined.csv"))
+data_DPO_simPO = data_combined[40000: 46000]
+data_DPO_simPO_train = os.path.join(pro_path, "data", "train", "data_DPO_simPO_train_2.csv")
 
 data_DPO_simPO["文言文_较差"] = None 
 
